@@ -1,0 +1,12 @@
+{
+  "name": "overworld-justchange",
+  "version": "1.0.0",
+  "description": "JUST CHANGE™ — Restoration Springs",
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --format=esm --external:three --external:\"three/addons/*\" --outfile=src/bundle.js",
+    "watch": "esbuild src/main.ts --bundle --format=esm --external:three --external:\"three/addons/*\" --outfile=src/bundle.js --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  }
+}
