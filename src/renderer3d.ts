@@ -804,7 +804,7 @@ export class Renderer3D {
     
     // Building lights get stronger at night
     this.buildingLights.forEach((light, i) => {
-      const completed = BUILDINGS[i]?.completed || false;
+      const completed = GAME.buildings[i]?.completed || false;
       light.intensity = completed ? (1.0 - dayFactor) * 1.5 : 0;
     });
     
@@ -824,11 +824,7 @@ export class Renderer3D {
     // Animate NPCs
     this.npcMeshes.forEach((mesh, i) => {
       const bob = Math.sin(time * 1.5 + i * 2) * 0.03;
-      mesh.children.forEach(child => {
-        if (child.position.y > 0) {
-          child.position.y += bob * 0.01;
-        }
-      });
+      mesh.position.y = bob;
     });
     
     // Animate notes

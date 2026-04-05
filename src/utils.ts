@@ -13,6 +13,30 @@ export function drawRect(
   ctx.fillRect(Math.floor(x), Math.floor(y), w, h);
 }
 
+// Draw a stroked border rectangle
+export function drawBorder(
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number,
+  color: string, lineWidth: number = 1
+): void {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.strokeRect(Math.floor(x), Math.floor(y), w, h);
+}
+
+// Draw a vertical gradient filled rectangle
+export function drawGradientRect(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number,
+  color1: string, color2: string
+): void {
+  const grad = ctx.createLinearGradient(x, y, x, y + h);
+  grad.addColorStop(0, color1);
+  grad.addColorStop(1, color2);
+  ctx.fillStyle = grad;
+  ctx.fillRect(Math.floor(x), Math.floor(y), w, h);
+}
+
 // Clamp value
 export function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
