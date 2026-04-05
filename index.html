@@ -1,0 +1,37 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JUST CHANGE™ — Restoration Springs</title>
+    <link rel="stylesheet" href="./src/styles/index.css" />
+    <style>
+      body { margin: 0; overflow: hidden; background: #0a0a14; }
+      #game-container { width: 100vw; height: 100vh; }
+    </style>
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://esm.sh/three@0.163.0",
+        "three/addons/": "https://esm.sh/three@0.163.0/examples/jsm/"
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <div id="game-container"></div>
+    <div id="ui-overlay"></div>
+    <div id="loading-screen" class="loading-screen">
+      <div class="loading-content">
+        <h1>JUST CHANGE™</h1>
+        <div class="loading-subtitle">Restoration Springs</div>
+        <div class="loading-bar">
+          <div class="loading-fill" id="loading-fill"></div>
+        </div>
+        <div class="loading-text" id="loading-text">Initializing...</div>
+      </div>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
