@@ -1,4 +1,5 @@
 
+
 // === JUST CHANGE™ — Restoration Springs Overworld (3D Enhanced) ===
 // SurvivingSOGICE · University of Bergen · 2026
 
@@ -17,6 +18,8 @@ class GameEngine {
   private loadingFill: HTMLElement | null = null;
   private loadingText: HTMLElement | null = null;
   private loadingScreen: HTMLElement | null = null;
+  private loadingError: HTMLElement | null = null;
+  private forceStartBtn: HTMLElement | null = null;
   private startScreen: HTMLElement | null = null;
   private transitionOverlay: HTMLElement | null = null;
   
@@ -24,6 +27,7 @@ class GameEngine {
   private lastTime = 0;
   private transitionAlpha = 0;
   private isTransitioning = false;
+  private initFailed = false;
 
   // Input
   private keys: Record<string, boolean> = {
@@ -35,10 +39,17 @@ class GameEngine {
   private keyJustPressed = new Set<string>();
   private _prevKeys: Record<string, boolean> | null = null;
 
+  private setLoading(text: string, progress: number): void {
+    if (this.loadingText) this.loadingText.textContent = text;
+    if (this.loadingFill) this.loadingFill.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+  }
+
   async init(): Promise<void> {
     const container = document.getElementById('game-container');
     if (!container) {
       console.error('No game container found');
+      this.setLoading('ERROR: Missing container', 0);
+      this.showError('Game container not found. Please refresh.');
       return;
     }
 
@@ -46,41 +57,131 @@ class GameEngine {
     this.loadingScreen = document.getElementById('loading-screen');
     this.loadingFill = document.getElementById('loading-fill');
     this.loadingText = document.getElementById('loading-text');
+    this.loadingError = document.getElementById('loading-error');
+    this.forceStartBtn = document.getElementById('force-start-btn');
     this.transitionOverlay = document.getElementById('transition-overlay');
 
-    // Update loading states
-    const setLoading = (text: string, progress: number) => {
-      if (this.loadingText) this.loadingText.textContent = text;
-      if (this.loadingFill) this.loadingFill.style.width = `${progress}%`;
-    };
+    // Setup force start button
+    if (this.forceStartBtn) {
+      this.forceStartBtn.addEventListener('click', () => {
+        console.log('Force starting game...');
+        this.handleInitError('Force start activated');
+      });
+    }
 
-    // Initialize audio
-    setLoading('Initializing audio...', 10);
-    await audio.init();
+    try {
+      // Initialize audio with timeout
+      this.setLoading('Initializing audio...', 10);
+      await this.initAudioWithTimeout();
+      
+      // Generate world
+      this.setLoading('Generating world...', 30);
+      await this.delay(100);
+      
+      // Initialize 3D renderer
+      this.setLoading('Rendering environment...', 60);
+      this.renderer3d = new Renderer3D(container);
+      await this.delay(100);
+      
+      // Prepare UI
+      this.setLoading('Preparing UI...', 80);
+      this.ui = new UILayer();
+      await this.delay(100);
+      
+      // Initialize game state
+      this.setLoading('Initializing systems...', 90);
+      GAME.init();
+      
+      // Try loading saved game
+      this.setLoading('Checking save data...', 100);
+      await this.loadGame();
+      await this.delay(200);
+      
+      // Success - show start screen
+      this.createStartScreen();
+      
+    } catch (error) {
+      console.error('Initialization error:', error);
+      this.handleInitError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  private async initAudioWithTimeout(): Promise<void> {
+    try {
+      // Create a promise that resolves when audio initializes
+      const audioPromise = audio.init();
+      
+      // Create a timeout promise (3 seconds)
+      const timeoutPromise = new Promise<void>((resolve) => {
+        setTimeout(() => {
+          console.warn('Audio initialization timeout - continuing without audio');
+          resolve();
+        }, 3000);
+      });
+      
+      // Race between audio init and timeout
+      await Promise.race([audioPromise, timeoutPromise]);
+      
+    } catch (error) {
+      console.warn('Audio failed to initialize:', error);
+      // Continue without audio - not fatal
+    }
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private handleError(step: string, error: unknown): void {
+    console.error(`Error during ${step}:`, error);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    this.setLoading(`ERROR: ${step}`, 100);
+    this.showError(`Failed during ${step}: ${errorMsg}`);
+    this.initFailed = true;
     
-    setLoading('Generating world...', 30);
-    await new Promise(r => setTimeout(r, 200));
+    // Show force start button
+    if (this.forceStartBtn) {
+      this.forceStartBtn.style.display = 'inline-block';
+    }
+  }
+
+  private handleInitError(errorMsg: string): void {
+    console.log('Handling init error:', errorMsg);
     
-    // Initialize 3D renderer
-    setLoading('Rendering environment...', 60);
-    this.renderer3d = new Renderer3D(container);
-    await new Promise(r => setTimeout(r, 100));
+    // Try to recover what we can
+    if (!this.renderer3d) {
+      const container = document.getElementById('game-container');
+      if (container) {
+        try {
+          this.renderer3d = new Renderer3D(container);
+        } catch (e) {
+          console.error('Failed to create renderer during recovery:', e);
+        }
+      }
+    }
     
-    setLoading('Preparing UI...', 80);
-    this.ui = new UILayer();
-    await new Promise(r => setTimeout(r, 100));
+    if (!this.ui) {
+      try {
+        this.ui = new UILayer();
+      } catch (e) {
+        console.error('Failed to create UI during recovery:', e);
+      }
+    }
     
-    // Initialize game state
-    setLoading('Initializing systems...', 90);
-    GAME.init();
+    if (!GAME.state.hasStarted) {
+      GAME.init();
+    }
     
-    // Try loading saved game
-    setLoading('Checking save data...', 100);
-    await this.loadGame();
-    await new Promise(r => setTimeout(r, 300));
-    
-    // Create start screen
+    // Hide loading screen and show start screen
+    this.loadingScreen?.classList.add('hidden');
     this.createStartScreen();
+  }
+
+  private showError(message: string): void {
+    if (this.loadingError) {
+      this.loadingError.textContent = message;
+      this.loadingError.style.display = 'block';
+    }
   }
 
   async loadGame(): Promise<void> {
@@ -93,7 +194,7 @@ class GameEngine {
         }
       }
     } catch (e) {
-      console.log('No save found or error loading');
+      console.log('No save found or error loading:', e);
     }
   }
 
@@ -107,6 +208,11 @@ class GameEngine {
   }
 
   createStartScreen(): void {
+    // Remove existing start screen if any
+    if (this.startScreen) {
+      this.startScreen.remove();
+    }
+
     const start = document.createElement('div');
     start.className = 'start-screen';
     start.innerHTML = `
@@ -128,18 +234,27 @@ class GameEngine {
     document.body.appendChild(start);
     this.startScreen = start;
 
-    this.startScreen.querySelector('#start-btn')?.addEventListener('click', () => this.startGame(false));
-    this.startScreen.querySelector('#continue-btn')?.addEventListener('click', () => this.startGame(true));
+    const startBtn = document.getElementById('start-btn');
+    const continueBtn = document.getElementById('continue-btn');
+    
+    if (startBtn) {
+      startBtn.addEventListener('click', () => this.startGame(false));
+    }
+    if (continueBtn) {
+      continueBtn.addEventListener('click', () => this.startGame(true));
+    }
   }
 
   async startGame(loadSave: boolean): Promise<void> {
     if (this.startScreen) {
       this.startScreen.style.opacity = '0';
+      this.startScreen.style.transition = 'opacity 0.8s ease';
       setTimeout(() => this.startScreen?.remove(), 800);
     }
 
     if (this.loadingScreen) {
       this.loadingScreen.classList.add('hidden');
+      this.loadingScreen.style.transition = 'opacity 0.8s ease';
     }
 
     if (!loadSave) {
@@ -149,19 +264,24 @@ class GameEngine {
       GAME.state.playerY = 32 * 26;
     }
 
-    this.ui?.init();
+    try {
+      this.ui?.init();
+    } catch (e) {
+      console.error('UI init error during start:', e);
+    }
     
     // Transition effect
     this.isTransitioning = true;
     if (this.transitionOverlay) {
       this.transitionOverlay.classList.add('active');
-      await new Promise(r => setTimeout(r, 500));
+      await this.delay(500);
       this.transitionOverlay.classList.remove('active');
     }
     this.isTransitioning = false;
 
     this.running = true;
     this.lastTime = performance.now();
+    this.setupInput();
     requestAnimationFrame((t) => this.loop(t));
   }
 
@@ -181,14 +301,22 @@ class GameEngine {
     this.drawPlayerSprite();
 
     // Update UI
-    this.ui?.updateDialogue(dt);
-    this.ui?.updateTicker(dt);
-    this.ui?.updateNotifications(dt);
-    this.ui?.updateHUD();
-    this.ui?.renderMinimap();
+    try {
+      this.ui?.updateDialogue(dt);
+      this.ui?.updateTicker(dt);
+      this.ui?.updateNotifications(dt);
+      this.ui?.updateHUD();
+      this.ui?.renderMinimap();
+    } catch (e) {
+      console.error('UI update error:', e);
+    }
 
     // Update audio
-    audio.update(GAME.state.time, GAME.state.dayTime);
+    try {
+      audio.update(GAME.state.time, GAME.state.dayTime);
+    } catch (e) {
+      // Audio errors are non-fatal
+    }
 
     // Auto-save every 30 seconds
     if (Math.floor(GAME.state.time) % 30 === 0 && Math.floor(GAME.state.time) > 0) {
@@ -200,7 +328,6 @@ class GameEngine {
 
   drawPlayerSprite(): void {
     // The player is drawn via the 3D renderer
-    // But we can add a simple 2D overlay if needed for UI elements
   }
 
   update(dt: number): void {
@@ -258,7 +385,9 @@ class GameEngine {
         if (state.walkTimer > 0.12) {
           state.walkTimer = 0;
           state.walkFrame = (state.walkFrame + 1) % 2;
-          if (Math.random() < 0.3) audio.playSFX('step');
+          try {
+            if (Math.random() < 0.3) audio.playSFX('step');
+          } catch (e) {}
         }
       } else {
         state.walkFrame = 0;
@@ -309,7 +438,7 @@ class GameEngine {
         this.ui?.hideNote();
       } else if (nearBuilding) {
         if (nearBuilding.locked) {
-          audio.playSFX('locked');
+          try { audio.playSFX('locked'); } catch (e) {}
           this.ui?.showPopup('🔒 LOCKED', 'Complete more sessions to unlock this area.', 'UNDERSTOOD');
         } else {
           this.npcInteraction(nearBuilding);
@@ -352,7 +481,7 @@ class GameEngine {
 
   npcInteraction(building: any): void {
     if (!this.ui) return;
-    audio.playSFX('select');
+    try { audio.playSFX('select'); } catch (e) {}
 
     const npc = GAME.npcs.find(n => n.buildingId === building.id);
     const speaker = npc?.name || building.npcName;
@@ -390,7 +519,9 @@ class GameEngine {
         e.preventDefault();
       }
       // Audio context unlock
-      if (audio) audio.init();
+      try {
+        audio.init();
+      } catch (e) {}
     });
 
     window.addEventListener('keyup', (e) => {
@@ -412,7 +543,6 @@ class GameEngine {
 
   async start(): Promise<void> {
     await this.init();
-    this.setupInput();
   }
 }
 
@@ -422,3 +552,4 @@ if (document.readyState === 'loading') {
 } else {
   new GameEngine().start();
 }
+
