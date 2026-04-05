@@ -230,7 +230,7 @@ export const GAME = {
       audio.playSFX('note');
       
       if (this.state.scarfStripes < 6) {
-        this.state.scarfStripes = Math.min(6, this.state.scarfStripes + 0.3);
+        this.state.scarfStripes = Math.min(6, this.state.scarfStripes + 1);
       }
       
       return true;
